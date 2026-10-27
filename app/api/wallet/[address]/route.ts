@@ -3,7 +3,35 @@ import { NextRequest, NextResponse } from "next/server";
 const LAMPORT_PER_SOL = 1_000_000_000;
 const BASE58_REGEX = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
-interface AnalyzedTransaction {
+const KNOWN_TOKENS: Record<string, string> = {
+  "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v": "USDC",
+  "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB": "USDT",
+  "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263": "BONK",
+  "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm": "WIF",
+  "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN": "JUP",
+  "rndrizKT3MK1iimdxRdWabcF7Zg7AR5T4nud4EkHBof": "RENDER",
+  "7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs": "ETH",
+  "So11111111111111111111111111111111111111112": "WSOL",
+};
+
+export type PersonaTag =
+  | "Windfall Winner"
+  | "Consistent Scalper"
+  | "DEX Arbitrage / Bot"
+  | "Whale / Diamond Hands"
+  | "Degen Trader"
+  | "Standard Wallet";
+
+export interface TokenChange {
+  mint: string;
+  symbol: string;
+  preAmount: number;
+  postAmount: number;
+  delta: number;
+  decimals: number;
+}
+
+export interface AnalyzedTransaction {
   signature: string;
   slot: number | null;
   blockTime: number | null;
@@ -15,6 +43,20 @@ interface AnalyzedTransaction {
   solChange: number;
   isWin: boolean;
   err: unknown;
+  tokenChanges: TokenChange[];
+}
+
+interface TokenBalanceEntry {
+  accountIndex: number;
+  mint: string;
+  owner?: string;
+  programId?: string;
+  uiTokenAmount: {
+    amount: string;
+    decimals: number;
+    uiAmount: number | null;
+    uiAmountString?: string;
+  };
 }
 
 interface SignatureInfo {
@@ -40,6 +82,8 @@ interface SolanaTransactionResult {
     fee?: number;
     preBalances?: number[];
     postBalances?: number[];
+    preTokenBalances?: TokenBalanceEntry[];
+    postTokenBalances?: TokenBalanceEntry[];
     loadedAddresses?: {
       writable?: Array<string | { pubkey?: string }>;
       readonly?: Array<string | { pubkey?: string }>;
@@ -141,8 +185,13 @@ export async function GET(
     if (signatures.length === 0) {
       return NextResponse.json({
         address: trimmedAddress,
+        personaTag: "Standard Wallet" as PersonaTag,
         realizedPnl: 0,
         winRate: 0,
+        consistencyScore: 0,
+        tradeFrequencyPerDay: 0,
+        avgHoldingDurationHours: 0,
+        isWindfallDriven: false,
         totalTransactions: 0,
         winningTransactions: 0,
         losingTransactions: 0,
@@ -151,8 +200,7 @@ export async function GET(
       });
     }
 
-    // 2. Fetch transaction details using getTransaction for those signatures
-    // Use JSON-RPC batching for performance, with fallback to individual calls
+    // 2. Fetch transaction details using getTransaction for those signatures (with JSON-RPC batching)
     const batchPayload = signatures.map((sig, index) => ({
       jsonrpc: "2.0",
       id: index + 1,
@@ -195,7 +243,7 @@ export async function GET(
       console.warn("Batch getTransaction encountered an error, falling back to individual calls:", batchErr);
     }
 
-    // If any transactions were not returned by batch request, fetch individually
+    // Individual fallback for any signatures not fulfilled by batch
     const pendingSignatures = signatures.filter((s) => !txMap.has(s.signature));
     if (pendingSignatures.length > 0) {
       await Promise.all(
@@ -233,7 +281,7 @@ export async function GET(
       );
     }
 
-    // 3. Process transactions and calculate SOL balance changes
+    // 3. Process transactions: Native SOL + SPL Token & Swap Parsing
     const recentTransactions: AnalyzedTransaction[] = [];
     let totalSolChange = 0;
     let winningTransactions = 0;
@@ -253,12 +301,12 @@ export async function GET(
       let preBalanceSol = 0;
       let postBalanceSol = 0;
       let solChange = 0;
+      const tokenChanges: TokenChange[] = [];
 
-      if (meta && tx?.transaction?.message) {
-        // Collect all accounts involved in the transaction in exact index order
-        const accountKeys: string[] = [];
+      // Collect all accounts involved in the transaction in exact index order
+      const accountKeys: string[] = [];
+      if (tx?.transaction?.message?.accountKeys) {
         const rawAccountKeys = tx.transaction.message.accountKeys;
-
         if (Array.isArray(rawAccountKeys)) {
           for (const key of rawAccountKeys) {
             if (typeof key === "string") {
@@ -268,21 +316,24 @@ export async function GET(
             }
           }
         }
+      }
 
-        // Account for versioned transaction address lookup tables (loadedAddresses)
-        if (meta.loadedAddresses) {
-          if (Array.isArray(meta.loadedAddresses.writable)) {
-            for (const key of meta.loadedAddresses.writable) {
-              accountKeys.push(typeof key === "string" ? key : key?.pubkey || String(key));
-            }
-          }
-          if (Array.isArray(meta.loadedAddresses.readonly)) {
-            for (const key of meta.loadedAddresses.readonly) {
-              accountKeys.push(typeof key === "string" ? key : key?.pubkey || String(key));
-            }
+      // Account for versioned Address Lookup Tables (loadedAddresses)
+      if (meta?.loadedAddresses) {
+        if (Array.isArray(meta.loadedAddresses.writable)) {
+          for (const key of meta.loadedAddresses.writable) {
+            accountKeys.push(typeof key === "string" ? key : key?.pubkey || String(key));
           }
         }
+        if (Array.isArray(meta.loadedAddresses.readonly)) {
+          for (const key of meta.loadedAddresses.readonly) {
+            accountKeys.push(typeof key === "string" ? key : key?.pubkey || String(key));
+          }
+        }
+      }
 
+      // Compute native SOL balance delta
+      if (meta && accountKeys.length > 0) {
         const walletIndex = accountKeys.findIndex((k) => k === trimmedAddress);
 
         if (
@@ -297,6 +348,74 @@ export async function GET(
           preBalanceSol = preLamports / LAMPORT_PER_SOL;
           postBalanceSol = postLamports / LAMPORT_PER_SOL;
           solChange = (postLamports - preLamports) / LAMPORT_PER_SOL;
+        }
+
+        // 1. SPL Token & Swap Parsing: Match preTokenBalances & postTokenBalances
+        const isWalletTokenAccount = (entry: TokenBalanceEntry): boolean => {
+          if (entry.owner && entry.owner.toLowerCase() === trimmedAddress.toLowerCase()) {
+            return true;
+          }
+          const acc = accountKeys[entry.accountIndex];
+          if (acc && acc.toLowerCase() === trimmedAddress.toLowerCase()) {
+            return true;
+          }
+          return false;
+        };
+
+        const preTokenMap = new Map<string, { amount: number; decimals: number }>();
+        const postTokenMap = new Map<string, { amount: number; decimals: number }>();
+
+        if (Array.isArray(meta.preTokenBalances)) {
+          for (const entry of meta.preTokenBalances) {
+            if (isWalletTokenAccount(entry)) {
+              const val =
+                entry.uiTokenAmount?.uiAmount ??
+                (entry.uiTokenAmount?.uiAmountString
+                  ? parseFloat(entry.uiTokenAmount.uiAmountString)
+                  : 0);
+              preTokenMap.set(entry.mint, {
+                amount: val || 0,
+                decimals: entry.uiTokenAmount?.decimals ?? 0,
+              });
+            }
+          }
+        }
+
+        if (Array.isArray(meta.postTokenBalances)) {
+          for (const entry of meta.postTokenBalances) {
+            if (isWalletTokenAccount(entry)) {
+              const val =
+                entry.uiTokenAmount?.uiAmount ??
+                (entry.uiTokenAmount?.uiAmountString
+                  ? parseFloat(entry.uiTokenAmount.uiAmountString)
+                  : 0);
+              postTokenMap.set(entry.mint, {
+                amount: val || 0,
+                decimals: entry.uiTokenAmount?.decimals ?? 0,
+              });
+            }
+          }
+        }
+
+        const allMints = new Set([...preTokenMap.keys(), ...postTokenMap.keys()]);
+        for (const mint of allMints) {
+          const pre = preTokenMap.get(mint)?.amount ?? 0;
+          const post = postTokenMap.get(mint)?.amount ?? 0;
+          const decimals =
+            postTokenMap.get(mint)?.decimals ?? preTokenMap.get(mint)?.decimals ?? 0;
+          const delta = Number((post - pre).toFixed(decimals > 0 ? decimals : 6));
+          if (Math.abs(delta) > 0) {
+            const symbol =
+              KNOWN_TOKENS[mint] || `${mint.slice(0, 4)}...${mint.slice(-4)}`;
+            tokenChanges.push({
+              mint,
+              symbol,
+              preAmount: pre,
+              postAmount: post,
+              delta,
+              decimals,
+            });
+          }
         }
       }
 
@@ -323,10 +442,11 @@ export async function GET(
         solChange: Number(solChange.toFixed(9)),
         isWin,
         err: sig.err || meta?.err || null,
+        tokenChanges,
       });
     }
 
-    // 4. Calculate metrics
+    const totalTransactions = recentTransactions.length;
     const evaluatedTransactions = winningTransactions + losingTransactions;
     const winRate =
       evaluatedTransactions > 0
@@ -335,11 +455,159 @@ export async function GET(
 
     const realizedPnl = Number(totalSolChange.toFixed(9));
 
+    // 2. Outlier & Windfall Detection
+    const positiveWins = recentTransactions
+      .map((tx) => tx.solChange)
+      .filter((change) => change > 0);
+    const maxSingleWin = positiveWins.length > 0 ? Math.max(...positiveWins) : 0;
+    const isWindfallDriven =
+      realizedPnl > 0 && maxSingleWin > 0 && maxSingleWin / realizedPnl > 0.7;
+
+    // Consistency Score (0-100 scale) based on win variance and standard deviation of net trade returns
+    let consistencyScore = 50;
+    if (totalTransactions > 0) {
+      const returns = recentTransactions.map((tx) => tx.solChange);
+      const mean = returns.reduce((a, b) => a + b, 0) / totalTransactions;
+      const variance =
+        returns.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / totalTransactions;
+      const stdDev = Math.sqrt(variance);
+
+      const volatilityPenalty = Math.min(40, (stdDev / (Math.abs(mean) + 0.1)) * 12);
+      const winRateScore = (winRate / 100) * 40;
+      const stabilityScore = Math.max(0, 40 - volatilityPenalty);
+      const profitBonus = realizedPnl > 0 ? 20 : (realizedPnl === 0 ? 10 : 0);
+      const windfallPenalty = isWindfallDriven ? 30 : 0;
+
+      const rawScore = winRateScore + stabilityScore + profitBonus - windfallPenalty;
+      consistencyScore = Math.round(Math.min(100, Math.max(0, rawScore)));
+    } else {
+      consistencyScore = 0;
+    }
+
+    // 3. Activity & Duration Metrics
+    const validBlockTimes = recentTransactions
+      .map((tx) => tx.blockTime)
+      .filter((t): t is number => typeof t === "number" && t > 0);
+
+    let tradeFrequencyPerDay = 0;
+    if (validBlockTimes.length >= 2) {
+      const minTime = Math.min(...validBlockTimes);
+      const maxTime = Math.max(...validBlockTimes);
+      const timespanDays = (maxTime - minTime) / 86400;
+
+      if (timespanDays > 0) {
+        tradeFrequencyPerDay = Number((totalTransactions / timespanDays).toFixed(2));
+      } else {
+        tradeFrequencyPerDay = Number((totalTransactions * 24).toFixed(2));
+      }
+    } else if (totalTransactions === 1) {
+      tradeFrequencyPerDay = 1.0;
+    }
+
+    // Calculate avgHoldingDurationHours
+    const chronologicalTxs = [...recentTransactions]
+      .filter((tx) => tx.blockTime !== null)
+      .sort((a, b) => (a.blockTime as number) - (b.blockTime as number));
+
+    const holdingDurations: number[] = [];
+
+    // Track matched token acquisitions (delta > 0) and liquidations (delta < 0)
+    const acquisitionTimesByMint = new Map<string, number[]>();
+    for (const tx of chronologicalTxs) {
+      const bt = tx.blockTime as number;
+      for (const tc of tx.tokenChanges) {
+        if (tc.delta > 0) {
+          const arr = acquisitionTimesByMint.get(tc.mint) || [];
+          arr.push(bt);
+          acquisitionTimesByMint.set(tc.mint, arr);
+        } else if (tc.delta < 0) {
+          const arr = acquisitionTimesByMint.get(tc.mint);
+          if (arr && arr.length > 0) {
+            const acqTime = arr.shift()!;
+            if (bt > acqTime) {
+              holdingDurations.push((bt - acqTime) / 3600);
+            }
+          }
+        }
+      }
+    }
+
+    // Fallback: check SOL trade cycles (outflow followed by inflow)
+    if (holdingDurations.length === 0) {
+      const buyTimes: number[] = [];
+      for (const tx of chronologicalTxs) {
+        const bt = tx.blockTime as number;
+        if (tx.solChange < -tx.feeSol) {
+          buyTimes.push(bt);
+        } else if (tx.solChange > 0 && buyTimes.length > 0) {
+          const buyTime = buyTimes.shift()!;
+          if (bt > buyTime) {
+            holdingDurations.push((bt - buyTime) / 3600);
+          }
+        }
+      }
+    }
+
+    let avgHoldingDurationHours = 0;
+    if (holdingDurations.length > 0) {
+      const avg = holdingDurations.reduce((a, b) => a + b, 0) / holdingDurations.length;
+      avgHoldingDurationHours = Number(avg.toFixed(1));
+    } else if (validBlockTimes.length >= 2) {
+      const minTime = Math.min(...validBlockTimes);
+      const maxTime = Math.max(...validBlockTimes);
+      const avgInterval =
+        (maxTime - minTime) / (3600 * Math.max(1, chronologicalTxs.length - 1));
+      avgHoldingDurationHours = Number(Math.max(0.1, avgInterval).toFixed(1));
+    }
+
+    // 4. Automated Behavior Profiling (Persona Tag)
+    let hasRapidIdenticalPattern = false;
+    for (let i = 0; i < chronologicalTxs.length - 1; i++) {
+      const tA = chronologicalTxs[i];
+      const tB = chronologicalTxs[i + 1];
+      if (tA.blockTime && tB.blockTime) {
+        const gap = Math.abs(tB.blockTime - tA.blockTime);
+        if (gap < 10) {
+          const sameSolChange =
+            Math.abs(tA.solChange - tB.solChange) < 0.0001 && tA.solChange !== 0;
+          const sameTokens = tA.tokenChanges.some((tcA) =>
+            tB.tokenChanges.some((tcB) => tcB.mint === tcA.mint)
+          );
+          if (sameSolChange || sameTokens || gap <= 2) {
+            hasRapidIdenticalPattern = true;
+            break;
+          }
+        }
+      }
+    }
+
+    let personaTag: PersonaTag = "Standard Wallet";
+
+    if (tradeFrequencyPerDay > 50 || hasRapidIdenticalPattern) {
+      personaTag = "DEX Arbitrage / Bot";
+    } else if (isWindfallDriven) {
+      personaTag = "Windfall Winner";
+    } else if (winRate >= 65 && totalTransactions >= 15) {
+      personaTag = "Consistent Scalper";
+    } else if (realizedPnl > 100 && tradeFrequencyPerDay < 2) {
+      personaTag = "Whale / Diamond Hands";
+    } else if (winRate < 40 && totalTransactions >= 10) {
+      personaTag = "Degen Trader";
+    } else {
+      personaTag = "Standard Wallet";
+    }
+
+    // 5. Return updated JSON contract
     return NextResponse.json({
       address: trimmedAddress,
+      personaTag,
       realizedPnl,
       winRate,
-      totalTransactions: recentTransactions.length,
+      consistencyScore,
+      tradeFrequencyPerDay,
+      avgHoldingDurationHours,
+      isWindfallDriven,
+      totalTransactions,
       winningTransactions,
       losingTransactions,
       neutralTransactions,
@@ -347,10 +615,8 @@ export async function GET(
     });
   } catch (err: unknown) {
     console.error("Error analyzing wallet:", err);
-    const message = err instanceof Error ? err.message : "Internal server error occurred.";
-    return NextResponse.json(
-      { error: message },
-      { status: 500 }
-    );
+    const message =
+      err instanceof Error ? err.message : "Internal server error occurred.";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
