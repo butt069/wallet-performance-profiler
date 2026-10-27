@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect, Suspense } from "react";
 import {
   Search,
   Wallet,
@@ -35,6 +35,7 @@ import {
   ArrowDown,
   ChevronLeft,
   ChevronRight,
+  Download,
 } from "lucide-react";
 
 export type PersonaTag =
@@ -52,6 +53,15 @@ interface TokenChange {
   postAmount: number;
   delta: number;
   decimals: number;
+}
+
+interface TokenPnlEntry {
+  mint: string;
+  symbol: string;
+  netDelta: number;
+  decimals: number;
+  tradeCount: number;
+  estimatedPnlSol: number;
 }
 
 interface AnalyzedTransaction {
@@ -83,6 +93,7 @@ interface WalletProfileData {
   losingTransactions: number;
   neutralTransactions: number;
   recentTransactions: AnalyzedTransaction[];
+  tokenPnl?: TokenPnlEntry[];
 }
 
 const SAMPLE_WALLETS = [
@@ -120,10 +131,15 @@ function formatTokenAmount(amount: number): string {
   return amount.toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
-function formatRelativeTime(timestamp: string | null, blockTime: number | null): string {
+function formatRelativeTime(timestamp: string | null, blockTime: number | null, nowMs?: number): string {
   if (!blockTime && !timestamp) return "Unknown";
   const timeMs = blockTime ? blockTime * 1000 : new Date(timestamp ?? "").getTime();
-  const diffSec = Math.floor((Date.now() - timeMs) / 1000);
+  const currentMs = nowMs && nowMs > 0 ? nowMs : 0;
+  if (currentMs === 0) {
+    if (timestamp) return timestamp.slice(0, 10);
+    return "Recent";
+  }
+  const diffSec = Math.floor((currentMs - timeMs) / 1000);
   if (diffSec < 0) return "Just now";
   if (diffSec < 60) return `${diffSec}s ago`;
   const diffMin = Math.floor(diffSec / 60);
@@ -213,7 +229,7 @@ function getTransactionType(tx: AnalyzedTransaction): {
   };
 }
 
-export default function WalletProfilerPage() {
+function WalletProfilerPage() {
   const [addressInput, setAddressInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -225,6 +241,12 @@ export default function WalletProfilerPage() {
   const [sortField, setSortField] = useState<SortField>("date");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [currentPage, setCurrentPage] = useState(1);
+  const [timeFrame, setTimeFrame] = useState<"24h" | "7d" | "30d" | "all">("all");
+  const [clientNowSec, setClientNowSec] = useState<number>(0);
+
+  useEffect(() => {
+    setClientNowSec(Math.floor(Date.now() / 1000));
+  }, []);
 
   const analyzeWallet = useCallback(async (targetAddress: string) => {
     const cleaned = targetAddress.trim();
@@ -236,6 +258,7 @@ export default function WalletProfilerPage() {
     setLoading(true);
     setError(null);
     setCurrentPage(1);
+    setTimeFrame("all");
 
     try {
       const response = await fetch(`/api/wallet/${cleaned}`);
@@ -274,11 +297,57 @@ export default function WalletProfilerPage() {
     setTimeout(() => setToastMessage(null), 2500);
   };
 
-  const maxSingleWin = useMemo(() => {
-    if (!data?.recentTransactions) return 0;
-    const wins = data.recentTransactions.map((t) => t.solChange).filter((c) => c > 0);
-    return wins.length > 0 ? Math.max(...wins) : 0;
-  }, [data]);
+  // ─── Time-frame derived stats ────────────────────────────────────────────────
+  type TimeFrame = "24h" | "7d" | "30d" | "all";
+
+  const TIME_FRAME_OPTIONS: { key: TimeFrame; label: string; seconds: number | null }[] = [
+    { key: "24h", label: "24 Hours",  seconds: 86_400 },
+    { key: "7d",  label: "7 Days",    seconds: 604_800 },
+    { key: "30d", label: "30 Days",   seconds: 2_592_000 },
+    { key: "all", label: "All Recent", seconds: null },
+  ];
+
+  const filteredStats = useMemo(() => {
+    const allTxs = data?.recentTransactions ?? [];
+    const cutoffSec = TIME_FRAME_OPTIONS.find((o) => o.key === timeFrame)?.seconds ?? null;
+
+    const txs = cutoffSec && clientNowSec > 0
+      ? allTxs.filter((tx) => tx.blockTime !== null && clientNowSec - (tx.blockTime as number) <= cutoffSec)
+      : allTxs;
+
+    const wins   = txs.filter((tx) => tx.solChange > 0);
+    const losses = txs.filter((tx) => tx.solChange < 0);
+    const neutral = txs.filter((tx) => tx.solChange === 0);
+
+    const realizedPnl = txs.reduce((sum, tx) => sum + tx.solChange, 0);
+    const evaluated   = wins.length + losses.length;
+    const winRate     = evaluated > 0 ? (wins.length / evaluated) * 100 : 0;
+
+    // Trade frequency over the filtered window (or the full API window)
+    const blockTimes = txs.map((tx) => tx.blockTime).filter((t): t is number => typeof t === "number" && t > 0);
+    let tradeFrequencyPerDay = 0;
+    if (blockTimes.length >= 2) {
+      const span = (Math.max(...blockTimes) - Math.min(...blockTimes)) / 86400;
+      tradeFrequencyPerDay = span > 0 ? txs.length / span : txs.length * 24;
+    } else if (txs.length === 1) {
+      tradeFrequencyPerDay = 1;
+    }
+
+    const topWin = wins.length > 0 ? Math.max(...wins.map((t) => t.solChange)) : 0;
+
+    return {
+      txs,
+      realizedPnl:          Number(realizedPnl.toFixed(9)),
+      winRate:              Number(winRate.toFixed(2)),
+      tradeFrequencyPerDay: Number(tradeFrequencyPerDay.toFixed(2)),
+      winningTransactions:  wins.length,
+      losingTransactions:   losses.length,
+      neutralTransactions:  neutral.length,
+      totalTransactions:    txs.length,
+      topWin,
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, timeFrame, clientNowSec]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -290,10 +359,141 @@ export default function WalletProfilerPage() {
     setCurrentPage(1);
   };
 
+  // ─── CSV Export ───────────────────────────────────────────────────────────
+  const exportCSV = useCallback(() => {
+    if (!data) return;
+
+    const esc = (v: string | number | null | undefined): string => {
+      const s = v === null || v === undefined ? "" : String(v);
+      // Wrap in quotes and escape any embedded quotes
+      return `"${s.replace(/"/g, '""')}"`;
+    };
+
+    const lines: string[] = [];
+
+    // ── Section 1: Wallet Summary ────────────────────────────────────────
+    lines.push("WALLET PROFILER REPORT");
+    lines.push(`Generated,${esc(new Date().toISOString())}`);
+    lines.push("");
+    lines.push("WALLET SUMMARY");
+    lines.push(`Wallet Address,${esc(data.address)}`);
+    lines.push(`Persona Tag,${esc(data.personaTag)}`);
+    lines.push(`Realized PnL (SOL),${esc(data.realizedPnl)}`);
+    lines.push(`Realized PnL (USD),${esc((data.realizedPnl * SOL_PRICE_USD).toFixed(2))}`);
+    lines.push(`Win Rate (%),${esc(data.winRate)}`);
+    lines.push(`Consistency Score,${esc(data.consistencyScore)}`);
+    lines.push(`Total Transactions,${esc(data.totalTransactions)}`);
+    lines.push(`Winning Transactions,${esc(data.winningTransactions)}`);
+    lines.push(`Losing Transactions,${esc(data.losingTransactions)}`);
+    lines.push(`Neutral Transactions,${esc(data.neutralTransactions)}`);
+    lines.push(`Trade Frequency (per day),${esc(data.tradeFrequencyPerDay)}`);
+    lines.push(`Avg Holding Duration (hours),${esc(data.avgHoldingDurationHours)}`);
+    lines.push(`Windfall Driven,${esc(data.isWindfallDriven ? "Yes" : "No")}`);
+    lines.push("");
+
+    // ── Section 2: Token Holdings Breakdown ─────────────────────────────
+    if (data.tokenPnl && data.tokenPnl.length > 0) {
+      lines.push("TOKEN HOLDINGS BREAKDOWN");
+      lines.push(
+        [
+          "Rank",
+          "Symbol",
+          "Mint Address",
+          "Trade Count",
+          "Net Balance Delta",
+          "Est. Realized PnL (SOL)",
+          "Est. Realized PnL (USD)",
+        ]
+          .map(esc)
+          .join(",")
+      );
+      data.tokenPnl.forEach((t, i) => {
+        lines.push(
+          [
+            i + 1,
+            t.symbol,
+            t.mint,
+            t.tradeCount,
+            t.netDelta,
+            t.estimatedPnlSol,
+            (t.estimatedPnlSol * SOL_PRICE_USD).toFixed(2),
+          ]
+            .map(esc)
+            .join(",")
+        );
+      });
+      lines.push("");
+    }
+
+    // ── Section 3: Transaction Detail ────────────────────────────────────
+    lines.push("TRANSACTION HISTORY");
+    lines.push(
+      [
+        "Signature",
+        "Slot",
+        "Timestamp (UTC)",
+        "Status",
+        "Outcome",
+        "Pre-Balance (SOL)",
+        "Post-Balance (SOL)",
+        "SOL Delta",
+        "Fee (SOL)",
+        "SPL Token Changes",
+      ]
+        .map(esc)
+        .join(",")
+    );
+
+    for (const tx of data.recentTransactions) {
+      const outcome = tx.solChange > 0 ? "WIN" : tx.solChange < 0 ? "LOSS" : "NEUTRAL";
+      const tokenSummary =
+        tx.tokenChanges && tx.tokenChanges.length > 0
+          ? tx.tokenChanges
+              .map((tc) => `${tc.delta > 0 ? "+" : ""}${tc.delta} ${tc.symbol}`)
+              .join(" | ")
+          : "";
+
+      lines.push(
+        [
+          tx.signature,
+          tx.slot ?? "",
+          tx.timestamp ?? "",
+          tx.status,
+          outcome,
+          tx.preBalanceSol,
+          tx.postBalanceSol,
+          tx.solChange,
+          tx.feeSol,
+          tokenSummary,
+        ]
+          .map(esc)
+          .join(",")
+      );
+    }
+
+    // ── Trigger download ─────────────────────────────────────────────────
+    const csvContent = lines.join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const fileName = `solana-profiler-${data.address.slice(0, 8)}-${new Date()
+      .toISOString()
+      .slice(0, 10)}.csv`;
+    link.setAttribute("href", url);
+    link.setAttribute("download", fileName);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    setToastMessage(`Report exported: ${fileName}`);
+    setTimeout(() => setToastMessage(null), 2500);
+  }, [data]);
+
   const sortedAndFilteredTransactions = useMemo(() => {
     if (!data?.recentTransactions) return [];
 
-    const filtered = data.recentTransactions.filter((tx) => {
+    const filtered = filteredStats.txs.filter((tx) => {
       if (filterType === "wins") return tx.solChange > 0;
       if (filterType === "losses") return tx.solChange < 0;
       if (filterType === "neutral") return tx.solChange === 0;
@@ -326,6 +526,9 @@ export default function WalletProfilerPage() {
   const circumference = 2 * Math.PI * radius;
   const scoreValue = data?.consistencyScore ?? 0;
   const strokeDashoffset = circumference - (scoreValue / 100) * circumference;
+
+  // maxSingleWin for the FILTERED window
+  const maxSingleWin = filteredStats.topWin;
 
   return (
     <div className="min-h-screen flex flex-col bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-black text-slate-100 selection:bg-purple-500/30 selection:text-purple-200">
@@ -605,6 +808,55 @@ export default function WalletProfilerPage() {
                   <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
                   <span>Refresh Profile</span>
                 </button>
+
+                <button
+                  id="export-csv-btn"
+                  type="button"
+                  onClick={exportCSV}
+                  title="Export wallet report as CSV"
+                  className="inline-flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600/30 to-teal-600/30 hover:from-emerald-600/50 hover:to-teal-600/50 border border-emerald-500/40 text-xs font-medium text-emerald-300 hover:text-emerald-200 transition-all active:scale-95 shadow-sm"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Export CSV</span>
+                </button>
+              </div>
+            </div>
+
+            {/* ── Time-Frame Filter Tabs ───────────────────────────────────────────── */}
+            <div
+              id="timeframe-tabs"
+              className="flex items-center justify-between gap-3 flex-wrap"
+            >
+              <div className="flex items-center p-1 gap-1 rounded-xl bg-slate-950/80 border border-slate-800/80 shadow-inner">
+                {TIME_FRAME_OPTIONS.map(({ key, label }) => (
+                  <button
+                    key={key}
+                    id={`timeframe-${key}`}
+                    type="button"
+                    onClick={() => {
+                      setTimeFrame(key);
+                      setCurrentPage(1);
+                    }}
+                    className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all duration-200 whitespace-nowrap ${
+                      timeFrame === key
+                        ? "bg-purple-600 text-white shadow-md shadow-purple-600/30"
+                        : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Live count badge */}
+              <div className="flex items-center space-x-2 text-xs text-slate-500">
+                <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse inline-block" />
+                <span>
+                  <span className="font-semibold text-slate-300">{filteredStats.totalTransactions}</span>
+                  {" "}of{" "}
+                  <span className="font-semibold text-slate-300">{data.totalTransactions}</span>
+                  {" "}transactions in window
+                </span>
               </div>
             </div>
 
@@ -620,39 +872,39 @@ export default function WalletProfilerPage() {
                   {/* Colored stat badge */}
                   <div
                     className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center space-x-1 ${
-                      data.realizedPnl >= 0
+                      filteredStats.realizedPnl >= 0
                         ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
                         : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
                     }`}
                   >
-                    {data.realizedPnl >= 0 ? (
+                    {filteredStats.realizedPnl >= 0 ? (
                       <TrendingUp className="w-3.5 h-3.5" />
                     ) : (
                       <TrendingDown className="w-3.5 h-3.5" />
                     )}
-                    <span>{data.realizedPnl >= 0 ? "Profit" : "Drawdown"}</span>
+                    <span>{filteredStats.realizedPnl >= 0 ? "Profit" : "Drawdown"}</span>
                   </div>
                 </div>
 
                 <div className="mt-4">
                   <div
                     className={`text-2xl sm:text-3xl font-extrabold tracking-tight font-mono ${
-                      data.realizedPnl > 0
+                      filteredStats.realizedPnl > 0
                         ? "text-emerald-400"
-                        : data.realizedPnl < 0
+                        : filteredStats.realizedPnl < 0
                         ? "text-rose-400"
                         : "text-slate-200"
                     }`}
                   >
-                    {data.realizedPnl > 0 ? "+" : ""}
-                    {formatSol(data.realizedPnl)}{" "}
+                    {filteredStats.realizedPnl > 0 ? "+" : ""}
+                    {formatSol(filteredStats.realizedPnl)}{" "}
                     <span className="text-xs font-sans text-slate-400 font-normal">SOL</span>
                   </div>
 
                   {/* Estimated USD Value */}
                   <div className="mt-1 text-xs text-slate-400 font-mono flex items-center space-x-1.5">
                     <span className="text-slate-300 font-medium">
-                      ≈ ${Math.abs(data.realizedPnl * SOL_PRICE_USD).toLocaleString(undefined, {
+                      ≈ ${Math.abs(filteredStats.realizedPnl * SOL_PRICE_USD).toLocaleString(undefined, {
                         minimumFractionDigits: 2,
                         maximumFractionDigits: 2,
                       })}{" "}
@@ -664,14 +916,14 @@ export default function WalletProfilerPage() {
 
                   <div className="mt-2.5 flex items-center space-x-1.5 text-xs text-slate-400">
                     <span className="text-slate-300 font-medium">
-                      {data.realizedPnl > 0
+                      {filteredStats.realizedPnl > 0
                         ? "Net Profitable"
-                        : data.realizedPnl < 0
+                        : filteredStats.realizedPnl < 0
                         ? "Net Drawdown"
                         : "Break-even"}
                     </span>
                     <span className="text-slate-600">•</span>
-                    <span>across {data.totalTransactions} transactions</span>
+                    <span>across {filteredStats.totalTransactions} transactions</span>
                   </div>
                 </div>
               </div>
@@ -689,27 +941,27 @@ export default function WalletProfilerPage() {
 
                 <div className="mt-4">
                   <div className="text-2xl sm:text-3xl font-extrabold tracking-tight font-mono text-white">
-                    {data.winRate.toFixed(1)}%
+                    {filteredStats.winRate.toFixed(1)}%
                   </div>
 
                   {/* Dual-color Progress Bar with Rounded Ends */}
                   <div className="mt-3 w-full h-2.5 rounded-full bg-slate-800 overflow-hidden flex shadow-inner">
                     <div
                       className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-500 rounded-l-full"
-                      style={{ width: `${Math.min(100, Math.max(0, data.winRate))}%` }}
+                      style={{ width: `${Math.min(100, Math.max(0, filteredStats.winRate))}%` }}
                     />
                     <div
                       className="h-full bg-rose-500/80 transition-all duration-500 rounded-r-full"
-                      style={{ width: `${100 - Math.min(100, Math.max(0, data.winRate))}%` }}
+                      style={{ width: `${100 - Math.min(100, Math.max(0, filteredStats.winRate))}%` }}
                     />
                   </div>
 
                   <div className="mt-2.5 flex items-center justify-between text-xs text-slate-400">
                     <span className="text-emerald-400 font-medium">
-                      {data.winningTransactions} Wins ({data.winRate.toFixed(0)}%)
+                      {filteredStats.winningTransactions} Wins ({filteredStats.winRate.toFixed(0)}%)
                     </span>
                     <span className="text-rose-400 font-medium">
-                      {data.losingTransactions} Losses ({(100 - data.winRate).toFixed(0)}%)
+                      {filteredStats.losingTransactions} Losses ({(100 - filteredStats.winRate).toFixed(0)}%)
                     </span>
                   </div>
                 </div>
@@ -812,7 +1064,7 @@ export default function WalletProfilerPage() {
                   <div className="p-2.5 rounded-xl bg-slate-800/40 border border-slate-700/50">
                     <span className="text-[11px] text-slate-400 block font-medium">Frequency</span>
                     <span className="text-xl font-bold font-mono text-white block mt-0.5">
-                      {data.tradeFrequencyPerDay}
+                      {filteredStats.tradeFrequencyPerDay}
                     </span>
                     <span className="text-[10px] text-slate-500">trades / day</span>
                   </div>
@@ -859,19 +1111,19 @@ export default function WalletProfilerPage() {
                   <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
                     <span className="text-xs text-emerald-400 font-medium block">Wins</span>
                     <span className="text-xl font-bold font-mono text-emerald-300">
-                      {data.winningTransactions}
+                      {filteredStats.winningTransactions}
                     </span>
                   </div>
                   <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20">
                     <span className="text-xs text-rose-400 font-medium block">Losses</span>
                     <span className="text-xl font-bold font-mono text-rose-300">
-                      {data.losingTransactions}
+                      {filteredStats.losingTransactions}
                     </span>
                   </div>
                   <div className="p-2.5 rounded-xl bg-slate-800/50 border border-slate-700">
                     <span className="text-xs text-slate-400 font-medium block">Neutral</span>
                     <span className="text-xl font-bold font-mono text-slate-300">
-                      {data.neutralTransactions}
+                      {filteredStats.neutralTransactions}
                     </span>
                   </div>
                 </div>
@@ -907,6 +1159,282 @@ export default function WalletProfilerPage() {
               </div>
             </div>
 
+            {/* ═══════════════════════════════════════════════════
+                Top Traded Tokens Section
+            ════════════════════════════════════════════════════ */}
+            {data.tokenPnl && data.tokenPnl.length > 0 && (
+              <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 rounded-2xl shadow-2xl overflow-hidden">
+                {/* Section Header */}
+                <div className="p-4 sm:p-6 border-b border-slate-800/80 flex items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-base sm:text-lg font-bold text-white flex items-center space-x-2">
+                      <span>Top Traded Tokens</span>
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 font-mono">
+                        {data.tokenPnl.length}
+                      </span>
+                    </h2>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Per-token holdings breakdown — net balance change &amp; correlated realized PnL across all transactions
+                    </p>
+                  </div>
+                  <div className="hidden sm:flex items-center space-x-2 text-xs text-slate-500">
+                    <Coins className="w-4 h-4 text-purple-400" />
+                    <span>SPL Token Aggregation</span>
+                  </div>
+                </div>
+
+                {/* Desktop Table */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-slate-950/70 text-slate-400 text-xs uppercase tracking-wider border-b border-slate-800/80 select-none">
+                      <tr>
+                        <th className="py-3.5 px-5 font-semibold w-8">#</th>
+                        <th className="py-3.5 px-4 font-semibold">Token</th>
+                        <th className="py-3.5 px-4 font-semibold text-center">Trades</th>
+                        <th className="py-3.5 px-4 font-semibold text-right">Net Balance Δ</th>
+                        <th className="py-3.5 px-4 font-semibold text-right">Est. Realized PnL (SOL)</th>
+                        <th className="py-3.5 px-4 font-semibold text-right">Est. Realized PnL (USD)</th>
+                        <th className="py-3.5 px-4 font-semibold text-center">Outcome</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/50">
+                      {data.tokenPnl.map((token, idx) => {
+                        const pnlPositive = token.estimatedPnlSol > 0;
+                        const pnlNegative = token.estimatedPnlSol < 0;
+                        const pnlUsd = token.estimatedPnlSol * SOL_PRICE_USD;
+                        const isKnown = !token.symbol.includes("...");
+
+                        return (
+                          <tr
+                            key={token.mint}
+                            className="hover:bg-slate-800/40 transition-colors group"
+                          >
+                            {/* Rank */}
+                            <td className="py-3.5 px-5 text-xs text-slate-500 font-mono">{idx + 1}</td>
+
+                            {/* Token Identity */}
+                            <td className="py-3.5 px-4">
+                              <div className="flex items-center space-x-2.5">
+                                <div
+                                  className={`w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                                    isKnown
+                                      ? "bg-purple-500/15 text-purple-300 border border-purple-500/30"
+                                      : "bg-slate-800 text-slate-400 border border-slate-700"
+                                  }`}
+                                >
+                                  {token.symbol.slice(0, 2).toUpperCase()}
+                                </div>
+                                <div>
+                                  <div className="font-semibold text-xs text-white">{token.symbol}</div>
+                                  <div
+                                    className="text-[10px] text-slate-500 font-mono cursor-pointer hover:text-purple-400 transition-colors"
+                                    title={token.mint}
+                                    onClick={() => handleCopy(token.mint)}
+                                  >
+                                    {truncate(token.mint, 5, 5)}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* Trade Count */}
+                            <td className="py-3.5 px-4 text-center">
+                              <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-slate-800/60 border border-slate-700/60 text-xs font-mono font-semibold text-slate-300">
+                                {token.tradeCount}
+                              </span>
+                            </td>
+
+                            {/* Net Delta */}
+                            <td className="py-3.5 px-4 text-right font-mono text-xs">
+                              <span
+                                className={`font-semibold ${
+                                  token.netDelta > 0
+                                    ? "text-emerald-400"
+                                    : token.netDelta < 0
+                                    ? "text-rose-400"
+                                    : "text-slate-400"
+                                }`}
+                              >
+                                {token.netDelta > 0 ? "+" : ""}
+                                {formatTokenAmount(token.netDelta)}
+                              </span>
+                              <div className="text-[10px] text-slate-600 mt-0.5">{token.symbol}</div>
+                            </td>
+
+                            {/* Est. PnL SOL */}
+                            <td className="py-3.5 px-4 text-right font-mono text-xs">
+                              <span
+                                className={`font-bold ${
+                                  pnlPositive
+                                    ? "text-emerald-400"
+                                    : pnlNegative
+                                    ? "text-rose-400"
+                                    : "text-slate-400"
+                                }`}
+                              >
+                                {pnlPositive ? "+" : ""}
+                                {formatSol(token.estimatedPnlSol)} SOL
+                              </span>
+                            </td>
+
+                            {/* Est. PnL USD */}
+                            <td className="py-3.5 px-4 text-right font-mono text-xs">
+                              <span
+                                className={`${
+                                  pnlPositive
+                                    ? "text-emerald-300"
+                                    : pnlNegative
+                                    ? "text-rose-300"
+                                    : "text-slate-400"
+                                }`}
+                              >
+                                {pnlUsd >= 0 ? "+" : ""}$
+                                {Math.abs(pnlUsd).toLocaleString(undefined, {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
+                                })}
+                              </span>
+                            </td>
+
+                            {/* Outcome Pill */}
+                            <td className="py-3.5 px-4 text-center">
+                              {pnlPositive ? (
+                                <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                  <ArrowUpRight className="w-3 h-3" />
+                                  <span>Gain</span>
+                                </span>
+                              ) : pnlNegative ? (
+                                <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30">
+                                  <ArrowDownRight className="w-3 h-3" />
+                                  <span>Loss</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-800 text-slate-400 border border-slate-700">
+                                  <MinusCircle className="w-3 h-3" />
+                                  <span>Neutral</span>
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile Cards View */}
+                <div className="md:hidden divide-y divide-slate-800/60">
+                  {data.tokenPnl.map((token, idx) => {
+                    const pnlPositive = token.estimatedPnlSol > 0;
+                    const pnlNegative = token.estimatedPnlSol < 0;
+                    const pnlUsd = token.estimatedPnlSol * SOL_PRICE_USD;
+                    const isKnown = !token.symbol.includes("...");
+
+                    return (
+                      <div key={token.mint} className="p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2.5">
+                            <div
+                              className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${
+                                isKnown
+                                  ? "bg-purple-500/15 text-purple-300 border border-purple-500/30"
+                                  : "bg-slate-800 text-slate-400 border border-slate-700"
+                              }`}
+                            >
+                              {token.symbol.slice(0, 2).toUpperCase()}
+                            </div>
+                            <div>
+                              <div className="font-bold text-sm text-white">{token.symbol}</div>
+                              <div className="text-[10px] text-slate-500 font-mono">{truncate(token.mint, 4, 4)}</div>
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700 font-mono">
+                              #{idx + 1}
+                            </span>
+                            {pnlPositive ? (
+                              <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                <ArrowUpRight className="w-3 h-3" />
+                                <span>Gain</span>
+                              </span>
+                            ) : pnlNegative ? (
+                              <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30">
+                                <ArrowDownRight className="w-3 h-3" />
+                                <span>Loss</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-800 text-slate-400 border border-slate-700">
+                                <MinusCircle className="w-3 h-3" />
+                                <span>Neutral</span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-2 text-xs">
+                          <div className="p-2 rounded-lg bg-slate-800/40 border border-slate-700/50 text-center">
+                            <div className="text-slate-500 text-[10px] mb-0.5">Trades</div>
+                            <div className="font-mono font-bold text-white">{token.tradeCount}</div>
+                          </div>
+                          <div className="p-2 rounded-lg bg-slate-800/40 border border-slate-700/50 text-center">
+                            <div className="text-slate-500 text-[10px] mb-0.5">Net Δ</div>
+                            <div
+                              className={`font-mono font-bold ${
+                                token.netDelta > 0
+                                  ? "text-emerald-400"
+                                  : token.netDelta < 0
+                                  ? "text-rose-400"
+                                  : "text-slate-400"
+                              }`}
+                            >
+                              {token.netDelta > 0 ? "+" : ""}{formatTokenAmount(token.netDelta)}
+                            </div>
+                          </div>
+                          <div className="p-2 rounded-lg bg-slate-800/40 border border-slate-700/50 text-center">
+                            <div className="text-slate-500 text-[10px] mb-0.5">PnL (SOL)</div>
+                            <div
+                              className={`font-mono font-bold ${
+                                pnlPositive
+                                  ? "text-emerald-400"
+                                  : pnlNegative
+                                  ? "text-rose-400"
+                                  : "text-slate-400"
+                              }`}
+                            >
+                              {pnlPositive ? "+" : ""}{formatSol(token.estimatedPnlSol)}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="text-xs text-slate-500 font-mono">
+                          USD ≈{" "}
+                          <span
+                            className={`font-semibold ${
+                              pnlPositive ? "text-emerald-400" : pnlNegative ? "text-rose-400" : "text-slate-400"
+                            }`}
+                          >
+                            {pnlUsd >= 0 ? "+" : ""}$
+                            {Math.abs(pnlUsd).toLocaleString(undefined, {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Footer note */}
+                <div className="p-3 border-t border-slate-800/60 bg-slate-950/40 text-[11px] text-slate-500 flex items-center space-x-1.5">
+                  <HelpCircle className="w-3 h-3 shrink-0" />
+                  <span>
+                    Estimated PnL is derived from the SOL flow correlated with each token swap transaction and is not based on historical token prices. Use as a directional indicator only.
+                  </span>
+                </div>
+              </div>
+            )}
+
             {/* Enhanced Transactions Table with Sorting & Pagination */}
             <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 rounded-2xl shadow-2xl overflow-hidden">
               {/* Table Header & Controls */}
@@ -937,7 +1465,7 @@ export default function WalletProfilerPage() {
                         : "text-slate-400 hover:text-slate-200"
                     }`}
                   >
-                    All ({data.recentTransactions.length})
+                    All ({filteredStats.totalTransactions})
                   </button>
                   <button
                     type="button"
@@ -951,7 +1479,7 @@ export default function WalletProfilerPage() {
                         : "text-slate-400 hover:text-emerald-400"
                     }`}
                   >
-                    Wins ({data.winningTransactions})
+                    Wins ({filteredStats.winningTransactions})
                   </button>
                   <button
                     type="button"
@@ -965,7 +1493,7 @@ export default function WalletProfilerPage() {
                         : "text-slate-400 hover:text-rose-400"
                     }`}
                   >
-                    Losses ({data.losingTransactions})
+                    Losses ({filteredStats.losingTransactions})
                   </button>
                   <button
                     type="button"
@@ -979,7 +1507,7 @@ export default function WalletProfilerPage() {
                         : "text-slate-400 hover:text-slate-300"
                     }`}
                   >
-                    Neutral ({data.neutralTransactions})
+                    Neutral ({filteredStats.neutralTransactions})
                   </button>
                 </div>
               </div>
@@ -1121,7 +1649,7 @@ export default function WalletProfilerPage() {
                             {/* Time / Slot */}
                             <td className="py-3.5 px-4 text-xs text-slate-400 whitespace-nowrap">
                               <div title={tx.timestamp || "Unknown"}>
-                                {formatRelativeTime(tx.timestamp, tx.blockTime)}
+                                {formatRelativeTime(tx.timestamp, tx.blockTime, clientNowSec * 1000)}
                               </div>
                               <div className="text-[11px] text-slate-500 font-mono">
                                 Slot: {tx.slot?.toLocaleString() || "—"}
@@ -1327,7 +1855,7 @@ export default function WalletProfilerPage() {
                           <span>
                             {formatSol(tx.preBalanceSol)} → {formatSol(tx.postBalanceSol)} SOL
                           </span>
-                          <span>{formatRelativeTime(tx.timestamp, tx.blockTime)}</span>
+                          <span>{formatRelativeTime(tx.timestamp, tx.blockTime, clientNowSec * 1000)}</span>
                         </div>
                       </div>
                     );
@@ -1409,6 +1937,110 @@ export default function WalletProfilerPage() {
           </div>
         )}
 
+        {/* Top Traded Tokens Section */}
+        {data && data.tokenPnl && data.tokenPnl.length > 0 && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
+                  <Coins className="w-4 h-4 text-indigo-400" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold text-white">Top Traded Tokens</h2>
+                  <p className="text-xs text-slate-500">Per-token aggregated PnL & balance breakdown</p>
+                </div>
+              </div>
+              <span className="text-xs text-slate-500 bg-slate-800/60 border border-slate-700/50 rounded-lg px-3 py-1">
+                {data.tokenPnl.length} token{data.tokenPnl.length !== 1 ? "s" : ""} detected
+              </span>
+            </div>
+
+            <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 rounded-2xl shadow-2xl overflow-hidden">
+              {/* Table header */}
+              <div className="grid grid-cols-12 gap-2 px-5 py-3 border-b border-slate-800/60 bg-slate-950/40 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
+                <div className="col-span-3">Token</div>
+                <div className="col-span-2 text-right">Net Balance Δ</div>
+                <div className="col-span-2 text-right">Est. PnL (SOL)</div>
+                <div className="col-span-2 text-right">Est. PnL (USD)</div>
+                <div className="col-span-1 text-right">Trades</div>
+                <div className="col-span-2 text-right">PnL Bar</div>
+              </div>
+
+              <div className="divide-y divide-slate-800/40">
+                {data.tokenPnl.map((token) => {
+                  const pnlPositive = token.estimatedPnlSol >= 0;
+                  const maxAbsPnl = Math.max(...data.tokenPnl!.map((t) => Math.abs(t.estimatedPnlSol)), 0.00001);
+                  const barPct = Math.min(100, (Math.abs(token.estimatedPnlSol) / maxAbsPnl) * 100);
+                  const usdVal = token.estimatedPnlSol * SOL_PRICE_USD;
+                  return (
+                    <div
+                      key={token.mint}
+                      className="grid grid-cols-12 gap-2 px-5 py-3.5 items-center hover:bg-slate-800/20 transition-colors duration-150 group"
+                    >
+                      {/* Token symbol + mint */}
+                      <div className="col-span-3 flex items-center space-x-2.5 min-w-0">
+                        <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${
+                          pnlPositive
+                            ? "bg-emerald-500/10 text-emerald-300 border border-emerald-500/20"
+                            : "bg-rose-500/10 text-rose-300 border border-rose-500/20"
+                        }`}>
+                          {token.symbol.slice(0, 2)}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-white">{token.symbol}</div>
+                          <div className="text-[10px] text-slate-500 font-mono truncate">
+                            {token.mint.slice(0, 6)}…{token.mint.slice(-4)}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Net balance delta */}
+                      <div className={`col-span-2 text-right text-sm font-mono font-medium ${
+                        token.netDelta > 0 ? "text-emerald-400" : token.netDelta < 0 ? "text-rose-400" : "text-slate-400"
+                      }`}>
+                        {token.netDelta > 0 ? "+" : ""}{formatTokenAmount(token.netDelta)}
+                      </div>
+
+                      {/* Estimated PnL SOL */}
+                      <div className={`col-span-2 text-right text-sm font-mono font-medium ${
+                        pnlPositive ? "text-emerald-400" : "text-rose-400"
+                      }`}>
+                        {pnlPositive ? "+" : ""}{formatSol(token.estimatedPnlSol)} SOL
+                      </div>
+
+                      {/* Estimated PnL USD */}
+                      <div className={`col-span-2 text-right text-xs font-mono ${
+                        pnlPositive ? "text-emerald-500" : "text-rose-500"
+                      }`}>
+                        {pnlPositive ? "+" : "-"}${Math.abs(usdVal).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                      </div>
+
+                      {/* Trade count */}
+                      <div className="col-span-1 text-right">
+                        <span className="text-xs text-slate-300 font-mono bg-slate-800/60 border border-slate-700/40 rounded-md px-1.5 py-0.5">
+                          {token.tradeCount}
+                        </span>
+                      </div>
+
+                      {/* PnL bar */}
+                      <div className="col-span-2 flex items-center justify-end">
+                        <div className="w-full max-w-[80px] h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-500 ${
+                              pnlPositive ? "bg-gradient-to-r from-emerald-500 to-emerald-400" : "bg-gradient-to-r from-rose-600 to-rose-400"
+                            }`}
+                            style={{ width: `${barPct}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Empty / Landing State Feature Grid */}
         {!data && !loading && !error && (
           <div className="max-w-4xl mx-auto pt-6 pb-12">
@@ -1455,5 +2087,13 @@ export default function WalletProfilerPage() {
         </div>
       </footer>
     </div>
+  );
+}
+
+export default function Page() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-950" />}>
+      <WalletProfilerPage />
+    </Suspense>
   );
 }

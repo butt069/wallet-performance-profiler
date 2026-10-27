@@ -31,6 +31,17 @@ export interface TokenChange {
   decimals: number;
 }
 
+
+export interface TokenPnlEntry {
+  mint: string;
+  symbol: string;
+  netDelta: number;
+  decimals: number;
+  tradeCount: number;
+  /** Approximate realized PnL in SOL — derived from correlated SOL flows */
+  estimatedPnlSol: number;
+}
+
 export interface AnalyzedTransaction {
   signature: string;
   slot: number | null;
@@ -197,6 +208,7 @@ export async function GET(
         losingTransactions: 0,
         neutralTransactions: 0,
         recentTransactions: [],
+        tokenPnl: [],
       });
     }
 
@@ -597,7 +609,42 @@ export async function GET(
       personaTag = "Standard Wallet";
     }
 
-    // 5. Return updated JSON contract
+    // 5. Per-token PnL aggregation
+    const tokenPnlMap = new Map<
+      string,
+      { symbol: string; netDelta: number; decimals: number; tradeCount: number; correlatedSolFlow: number }
+    >();
+
+    for (const tx of recentTransactions) {
+      for (const tc of tx.tokenChanges) {
+        const existing = tokenPnlMap.get(tc.mint) ?? {
+          symbol: tc.symbol,
+          netDelta: 0,
+          decimals: tc.decimals,
+          tradeCount: 0,
+          correlatedSolFlow: 0,
+        };
+        existing.netDelta += tc.delta;
+        existing.tradeCount += 1;
+        // Attribute the SOL change from this transaction to the tokens touched in it
+        // (distributes the sol flow equally across token mints in the same tx)
+        existing.correlatedSolFlow += tc.delta !== 0 ? tx.solChange / Math.max(1, tx.tokenChanges.length) : 0;
+        tokenPnlMap.set(tc.mint, existing);
+      }
+    }
+
+    const tokenPnl: TokenPnlEntry[] = Array.from(tokenPnlMap.entries())
+      .map(([mint, v]) => ({
+        mint,
+        symbol: v.symbol,
+        netDelta: Number(v.netDelta.toFixed(v.decimals > 0 ? Math.min(v.decimals, 6) : 6)),
+        decimals: v.decimals,
+        tradeCount: v.tradeCount,
+        estimatedPnlSol: Number(v.correlatedSolFlow.toFixed(9)),
+      }))
+      .sort((a, b) => Math.abs(b.estimatedPnlSol) - Math.abs(a.estimatedPnlSol));
+
+    // 6. Return updated JSON contract
     return NextResponse.json({
       address: trimmedAddress,
       personaTag,
@@ -612,6 +659,7 @@ export async function GET(
       losingTransactions,
       neutralTransactions,
       recentTransactions,
+      tokenPnl,
     });
   } catch (err: unknown) {
     console.error("Error analyzing wallet:", err);
