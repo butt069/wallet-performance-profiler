@@ -62,9 +62,9 @@ async function route(req: IncomingMessage, res: ServerResponse) {
 
   // CHANGED: regex now also accepts /label
   const wm = p.match(/^\/api\/wallets\/(0x[0-9a-fA-F]{40})(\/filter|\/label)?$/);
-  if (wm && m === "GET"    && !wm[2]) { const w = getWallet(wm[1]); return w ? json(res, 200, w) : json(res, 404, { error: "Wallet not found" }); }
+  if (wm && m === "GET" && !wm[2]) { const w = getWallet(wm[1]); return w ? json(res, 200, w) : json(res, 404, { error: "Wallet not found" }); }
   if (wm && m === "DELETE" && !wm[2]) { removeWallet(wm[1]); return json(res, 200, { ok: true }); }
-  if (wm && m === "PUT"    && wm[2] === "/filter") return json(res, 200, updateFilter(wm[1], await readBody(req)));
+  if (wm && m === "PUT" && wm[2] === "/filter") return json(res, 200, updateFilter(wm[1], await readBody(req)));
 
   // NEW: update a wallet's custom label/name
   if (wm && m === "PUT" && wm[2] === "/label") {
