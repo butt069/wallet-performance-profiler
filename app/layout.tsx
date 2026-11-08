@@ -13,9 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Solana Wallet Performance Profiler | Realized PnL & Win Rate Tracker",
+  title: "ChainScope | Wallet Intelligence Platform",
   description:
-    "Real-time Solana wallet analytics. Track realized SOL PnL, win rates, and inspect the last 20 transactions via Alchemy JSON-RPC.",
+    "Institutional blockchain analytics platform. Real-time wallet performance profiling, realized PnL, win rates, consistency scoring, and automated persona behavior tags.",
 };
 
 export default function RootLayout({
@@ -26,9 +26,11 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} dark h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col font-sans bg-[#F8FAFC] text-slate-900">{children}</body>
+      <body className="min-h-full flex flex-col font-sans bg-[#080D1A] text-slate-100">
+        {children}
+      </body>
     </html>
   );
 }

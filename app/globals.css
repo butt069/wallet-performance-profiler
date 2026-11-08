@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #F8FAFC;
-  --foreground: #0F172A;
+  --background: #080D1A;
+  --foreground: #F1F5F9;
 }
 
 body {
@@ -11,21 +11,21 @@ body {
   min-height: 100vh;
 }
 
-/* Soft light-mode custom scrollbars */
+/* Dark institutional custom scrollbars matching ChainScope palette */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #E2E8F0;
+  background: #0A101D;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #CBD5E1;
+  background: #1E293B;
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94A3B8;
+  background: #334155;
 }
