@@ -108,6 +108,24 @@ export function Sidebar({ currentModule }: SidebarProps) {
                 <span className="truncate">Wallet Performance</span>
               </Link>
 
+              {/* Whale Radar / WalletWatch Pro — Module 2 */}
+              <Link
+                href="/walletwatch"
+                onClick={() => setMobileOpen(false)}
+                className={`group flex items-center space-x-3 px-3.5 py-3 rounded-xl text-sm font-semibold transition-all ${
+                  isWalletWatch
+                    ? "bg-[#131d31] text-white shadow-xs"
+                    : "text-slate-400 hover:text-white hover:bg-slate-800/50"
+                }`}
+              >
+                <Radio
+                  className={`w-5 h-5 shrink-0 ${
+                    isWalletWatch ? "text-purple-400" : "text-slate-400 group-hover:text-white"
+                  }`}
+                />
+                <span className="truncate">Whale Radar</span>
+              </Link>
+
               {/* Contract Screener Module (ChainScope Platform Module) */}
               <button
                 type="button"

@@ -693,111 +693,94 @@ export function WalletWatchDashboard() {
         {/* =========================================================================
             FEATURE 1: GLOBAL LIVE MARKET TICKER BAR (Top Bar Header)
            ========================================================================= */}
-        <header className="sticky top-0 z-40 bg-[#090713]/95 backdrop-blur-xl border-b border-purple-900/40 text-xs px-4 py-2 flex flex-col md:flex-row items-center justify-between gap-3 shadow-md">
-          
-          {/* Live Feeds Section */}
-          <div className="flex items-center space-x-4 overflow-x-auto w-full md:w-auto py-1 font-mono">
+        <header className="sticky top-0 z-40 bg-[#090713] border-b border-purple-900/40 shadow-lg">
+          {/* Row 1: Ticker Bar */}
+          <div className="border-b border-purple-900/30 px-4 py-1.5 flex items-center space-x-4 overflow-x-auto text-xs font-mono">
+            {/* LIVE MARKET badge */}
             <div className="inline-flex items-center space-x-1.5 px-2 py-0.5 rounded-md bg-purple-500/15 text-purple-300 border border-purple-500/30 font-bold uppercase text-[11px] shrink-0">
-              <span className="w-2 h-2 rounded-full bg-purple-400 animate-ping"></span>
-              <span>LIVE RADAR</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-ping"></span>
+              <span>LIVE MARKET</span>
             </div>
-
             {/* BTC/USD */}
-            <button
-              onClick={() => setActiveAsset("BTC")}
-              className="flex items-center space-x-1 hover:text-white transition-colors shrink-0 cursor-pointer"
-            >
-              <span className="text-slate-400 font-semibold">BTC/USD</span>
+            <button onClick={() => setActiveAsset("BTC")} className="flex items-center space-x-1 hover:text-white shrink-0 cursor-pointer">
+              <span className="text-slate-400">BTC/USD</span>
               <span className="text-white font-bold">$96,423.30</span>
-              <span className="text-emerald-400 font-bold">+3.42%</span>
+              <span className="text-emerald-400 font-bold">+3.42% ▲</span>
             </button>
-
             {/* ETH/USD */}
-            <button
-              onClick={() => setActiveAsset("WETH")}
-              className="flex items-center space-x-1 hover:text-white transition-colors shrink-0 cursor-pointer"
-            >
-              <span className="text-slate-400 font-semibold">ETH/USD</span>
+            <button onClick={() => setActiveAsset("WETH")} className="flex items-center space-x-1 hover:text-white shrink-0 cursor-pointer">
+              <span className="text-slate-400">ETH/USD</span>
               <span className="text-white font-bold">$2,784.95</span>
-              <span className="text-emerald-400 font-bold">+1.85%</span>
+              <span className="text-emerald-400 font-bold">+1.85% ▲</span>
             </button>
-
             {/* SOL/USD */}
-            <button
-              onClick={() => setActiveAsset("SOL")}
-              className="flex items-center space-x-1 hover:text-white transition-colors shrink-0 cursor-pointer"
-            >
-              <span className="text-slate-400 font-semibold">SOL/USD</span>
+            <button onClick={() => setActiveAsset("SOL")} className="flex items-center space-x-1 hover:text-white shrink-0 cursor-pointer">
+              <span className="text-slate-400">SOL/USD</span>
               <span className="text-white font-bold">$184.68</span>
-              <span className="text-rose-400 font-bold">-0.45%</span>
+              <span className="text-rose-400 font-bold">-0.45% ▼</span>
             </button>
-
             {/* BNB/USD */}
-            <button
-              onClick={() => setActiveAsset("BNB")}
-              className="flex items-center space-x-1 hover:text-white transition-colors shrink-0 cursor-pointer"
-            >
-              <span className="text-slate-400 font-semibold">BNB/USD</span>
+            <button onClick={() => setActiveAsset("BNB")} className="flex items-center space-x-1 hover:text-white shrink-0 cursor-pointer">
+              <span className="text-slate-400">BNB/USD</span>
               <span className="text-white font-bold">$642.18</span>
-              <span className="text-emerald-400 font-bold">+0.95%</span>
+              <span className="text-emerald-400 font-bold">+0.95% ▲</span>
             </button>
-
             {/* DXY */}
-            <button
-              onClick={() => setActiveAsset("DXY")}
-              className="flex items-center space-x-1 hover:text-white transition-colors shrink-0 cursor-pointer"
-            >
-              <span className="text-slate-400 font-semibold">DXY</span>
+            <button onClick={() => setActiveAsset("DXY")} className="flex items-center space-x-1 hover:text-white shrink-0 cursor-pointer">
+              <span className="text-slate-400">DXY</span>
               <span className="text-white font-bold">184.25</span>
-              <span className="text-emerald-400 font-bold">+0.12%</span>
+              <span className="text-emerald-400 font-bold">+0.12% ▲</span>
             </button>
-          </div>
-
-          {/* Status Controls & Action Badges */}
-          <div className="flex items-center space-x-3 text-xs shrink-0 self-end md:self-auto">
-            {/* Real-Time Gas Metric */}
-            <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-medium">
-              <Flame className="w-3.5 h-3.5" />
+            {/* Gas metric */}
+            <div className="flex items-center space-x-1 px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] font-semibold shrink-0">
+              <Flame className="w-3 h-3" />
               <span>Gas 12 Gwei Optimal</span>
             </div>
+          </div>
 
-            {/* Polling Node Indicator */}
-            <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-300">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              <span className="font-mono text-[11px]">Node Active - 4s Polling</span>
+          {/* Row 2: Branding + Controls */}
+          <div className="bg-[#0A0F1D] px-4 sm:px-6 py-2.5 flex items-center justify-between gap-4">
+            {/* Left: Brand */}
+            <div className="flex items-center space-x-3">
+              <div className="w-9 h-9 rounded-xl bg-purple-600 flex items-center justify-center font-bold text-white text-sm shadow-md shrink-0">$</div>
+              <div>
+                <div className="flex items-center space-x-2">
+                  <span className="font-black text-white text-base tracking-tight">WalletWatch Pro</span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-transparent text-purple-300 border border-purple-500/50 font-mono uppercase tracking-wider">CYBER-VIOLET TERMINAL</span>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-tight">Real-Time On-Chain Whale Radar & Native Candlestick Terminal</p>
+              </div>
             </div>
 
-            {/* Alert Chime Toggle */}
-            <button
-              onClick={() => {
-                setChimeEnabled(!chimeEnabled);
-                if (!chimeEnabled) playChime();
-              }}
-              className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
-                chimeEnabled
-                  ? "bg-purple-500/20 text-purple-300 border-purple-500/40"
-                  : "bg-slate-900 text-slate-500 border-slate-800"
-              }`}
-              title={chimeEnabled ? "Chime Mute" : "Chime Enable"}
-            >
-              {chimeEnabled ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
-            </button>
-
-            {/* Simulator Sandbox Button */}
-            <button
-              onClick={() => setSimModalOpen(true)}
-              className="px-2.5 py-1 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-semibold transition-colors cursor-pointer flex items-center space-x-1"
-            >
-              <Zap className="w-3.5 h-3.5" />
-              <span>Simulator Sandbox</span>
-            </button>
-
-            {/* Unread Signals Counter Badge */}
-            <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-purple-500/15 border border-purple-500/30 text-purple-300 font-bold font-mono">
-              <span>Unread Signals:</span>
-              <span className="px-1.5 py-0.2 rounded-full bg-purple-600 text-white text-[11px]">
-                {unreadCount}
-              </span>
+            {/* Right: Controls */}
+            <div className="flex items-center space-x-2 text-xs shrink-0">
+              {/* Node Active */}
+              <div className="hidden sm:flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 text-[11px]">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+                <span className="font-mono">Node Active - 4s Polling</span>
+              </div>
+              {/* Alert Chime - text button */}
+              <button
+                onClick={() => { setChimeEnabled(!chimeEnabled); if (!chimeEnabled) playChime(); }}
+                className={`hidden sm:flex items-center space-x-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-semibold cursor-pointer transition-all ${chimeEnabled ? "bg-purple-500/15 text-purple-300 border-purple-500/30" : "bg-slate-900 text-slate-500 border-slate-800"}`}
+              >
+                {chimeEnabled ? <Bell className="w-3.5 h-3.5" /> : <BellOff className="w-3.5 h-3.5" />}
+                <span>Alert Chime</span>
+              </button>
+              {/* Simulator Sandbox */}
+              <button
+                onClick={() => setSimModalOpen(true)}
+                className="flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:border-purple-500/40 hover:text-purple-300 text-[11px] font-semibold cursor-pointer transition-all"
+              >
+                <Zap className="w-3.5 h-3.5 text-purple-400" />
+                <span>Simulator Sandbox</span>
+              </button>
+              {/* Unread Signals */}
+              <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[11px] font-semibold">
+                <Bell className="w-3.5 h-3.5" />
+                <span>Unread Signals</span>
+                <span className="px-1.5 py-0.5 rounded-full bg-amber-500 text-black font-black text-[10px]">{unreadCount}</span>
+              </div>
             </div>
           </div>
         </header>
@@ -1360,6 +1343,145 @@ export function WalletWatchDashboard() {
                 )}
               </div>
 
+            </div>
+
+          </div>
+
+          {/* =========================================================================
+              SECTION 7: Active Monitored Watchlist + Activity Breakdown
+             ========================================================================= */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+            {/* Left: Active Monitored Watchlist (5 cols) */}
+            <div className="lg:col-span-5 bg-[#0F172A]/70 border border-slate-800 rounded-3xl p-5 shadow-2xl backdrop-blur-xl space-y-3">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                <div className="flex items-center space-x-2">
+                  <div className="w-7 h-7 rounded-lg bg-purple-500/15 text-purple-400 flex items-center justify-center">
+                    <Layers className="w-4 h-4" />
+                  </div>
+                  <h3 className="font-bold text-white text-sm">Active Monitored Watchlist</h3>
+                </div>
+                <span className="w-6 h-6 rounded-full bg-purple-600 text-white text-xs font-black flex items-center justify-center">{entities.length}</span>
+              </div>
+
+              <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+                {entities.map((ent) => {
+                  const avatarLetter = ent.label.charAt(0).toUpperCase();
+                  const avatarColors = ["bg-violet-600", "bg-orange-600", "bg-cyan-700", "bg-emerald-700"];
+                  const colorIdx = ent.id.charCodeAt(ent.id.length - 1) % avatarColors.length;
+                  return (
+                    <div key={ent.id} className="bg-slate-900/70 border border-slate-800 rounded-2xl p-3.5 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <div className={`w-7 h-7 rounded-full ${avatarColors[colorIdx]} flex items-center justify-center text-white text-xs font-black shrink-0`}>{avatarLetter}</div>
+                          <span className="font-bold text-white text-sm">{ent.label}</span>
+                        </div>
+                        <div className="flex items-center space-x-1">
+                          <button onClick={handleExportCsv} className="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-semibold cursor-pointer transition-colors">CSV</button>
+                          <button className="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-semibold cursor-pointer transition-colors">Rename</button>
+                          <button className="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-semibold cursor-pointer transition-colors">Filters</button>
+                          <button onClick={() => handleRemoveEntity(ent.id)} className="px-2 py-0.5 rounded-lg bg-rose-900/50 hover:bg-rose-800/50 text-rose-400 text-[10px] font-semibold cursor-pointer transition-colors">Remove</button>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-1.5">
+                        <span className="font-mono text-[11px] text-slate-400 truncate">{truncate(ent.address, 10, 10)}</span>
+                        <button className="text-slate-500 hover:text-slate-300 transition-colors" title="Copy address"><Check className="w-3 h-3" /></button>
+                      </div>
+                      <div className="flex items-center space-x-2 text-[10px]">
+                        <span className="text-emerald-400 font-semibold">≥ {formatUsd(ent.minThreshold)} · Tokens: {ent.tokens.join(", ")}</span>
+                      </div>
+                      <div>
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-semibold">All activity monitored</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Right: Activity Breakdown & Capital Allocation (7 cols) */}
+            <div className="lg:col-span-7 bg-[#0F172A]/70 border border-slate-800 rounded-3xl p-5 shadow-2xl backdrop-blur-xl space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                <div className="flex items-center space-x-2">
+                  <TrendingUp className="w-5 h-5 text-purple-400" />
+                  <h3 className="font-bold text-white text-sm">Activity Breakdown & Capital Allocation</h3>
+                </div>
+                <span className="text-[11px] text-amber-400 font-semibold">💡 Click any asset below to open its live chart</span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Activity by Order Type */}
+                <div className="space-y-3">
+                  <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Activity by Order Type</h4>
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-slate-500 text-[10px] uppercase tracking-wider border-b border-slate-800">
+                        <th className="text-left pb-2">Event Type</th>
+                        <th className="text-right pb-2">Count</th>
+                        <th className="text-right pb-2">Volume (USD)</th>
+                        <th className="text-right pb-2">Share</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60">
+                      <tr className="hover:bg-slate-800/30 transition-colors">
+                        <td className="py-2.5 flex items-center space-x-1.5"><span className="text-yellow-400">⚡</span><span className="text-white font-semibold">Swaps (DEX)</span></td>
+                        <td className="py-2.5 text-right text-slate-300">17</td>
+                        <td className="py-2.5 text-right font-mono font-bold text-emerald-400">$2,198,000</td>
+                        <td className="py-2.5 text-right text-purple-300 font-semibold">95.6%</td>
+                      </tr>
+                      <tr className="hover:bg-slate-800/30 transition-colors">
+                        <td className="py-2.5 flex items-center space-x-1.5"><span className="text-cyan-400">🌊</span><span className="text-white font-semibold">On-Chain Transfers</span></td>
+                        <td className="py-2.5 text-right text-slate-300">16</td>
+                        <td className="py-2.5 text-right font-mono font-bold text-emerald-400">$100,277</td>
+                        <td className="py-2.5 text-right text-purple-300 font-semibold">4.4%</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Token Asset Volume Leaderboard */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Token Asset Volume Leaderboard</h4>
+                    <button onClick={() => setActiveAsset("WETH")} className="text-[10px] text-cyan-400 hover:text-cyan-300 font-semibold cursor-pointer transition-colors">Click to Open Chart</button>
+                  </div>
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-slate-500 text-[10px] uppercase tracking-wider border-b border-slate-800">
+                        <th className="text-left pb-2">Rank / Asset</th>
+                        <th className="text-right pb-2">Count</th>
+                        <th className="text-right pb-2">Total Amount</th>
+                        <th className="text-right pb-2">Share</th>
+                        <th className="text-right pb-2">Chart</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60">
+                      {[
+                        { rank: 1, asset: "WETH", count: 4, amount: "$960,000", share: "41.8%" },
+                        { rank: 2, asset: "USDC", count: 9, amount: "$780,000", share: "33.9%" },
+                        { rank: 3, asset: "USDT", count: 4, amount: "$325,276", share: "14.2%" },
+                        { rank: 4, asset: "ETH",  count: 2, amount: "$268,000", share: "9.1%" },
+                        { rank: 5, asset: "USD",  count: 1, amount: "$25,000",  share: "1.1%" },
+                        { rank: 6, asset: "MINI", count: 6, amount: "$1",        share: "0.0%" },
+                        { rank: 7, asset: "ME",   count: 7, amount: "$0",        share: "0.0%" },
+                      ].map((row) => (
+                        <tr key={row.rank} className="hover:bg-slate-800/30 transition-colors cursor-pointer" onClick={() => { if (ASSET_REGISTRY[row.asset]) setActiveAsset(row.asset); }}>
+                          <td className="py-2 font-mono">
+                            <span className="text-slate-500 mr-1.5">{row.rank}</span>
+                            <span className="font-bold text-white">{row.asset}</span>
+                          </td>
+                          <td className="py-2 text-right text-slate-300">{row.count}</td>
+                          <td className="py-2 text-right font-mono font-bold text-emerald-400">{row.amount}</td>
+                          <td className="py-2 text-right text-purple-300 font-semibold">{row.share}</td>
+                          <td className="py-2 text-right">
+                            <button className="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-blue-800/50 text-cyan-400 text-[10px] font-semibold cursor-pointer transition-colors">View</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
 
           </div>
