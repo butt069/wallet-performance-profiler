@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 
 interface SidebarProps {
-  currentModule?: "solana" | "ethereum" | "walletwatch";
+  currentModule?: "solana" | "ethereum" | "walletwatch" | "screener";
 }
 
 export function Sidebar({ currentModule }: SidebarProps) {
@@ -22,9 +22,14 @@ export function Sidebar({ currentModule }: SidebarProps) {
   const [modalModule, setModalModule] = useState<"screener" | "cluster" | null>(null);
 
   // Active module detection
-  const isWalletWatch = currentModule === "walletwatch" || pathname === "/walletwatch";
+  const isModule2Active =
+    currentModule === "walletwatch" ||
+    currentModule === "screener" ||
+    pathname === "/walletwatch" ||
+    pathname === "/contract-screener";
+
   const isWalletPerformance =
-    !isWalletWatch &&
+    !isModule2Active &&
     (currentModule === "solana" ||
       currentModule === "ethereum" ||
       pathname === "/" ||
@@ -90,7 +95,7 @@ export function Sidebar({ currentModule }: SidebarProps) {
             </div>
 
             <nav className="space-y-1.5">
-              {/* Wallet Performance — covers both Solana & Ethereum pages */}
+              {/* Module 1: Wallet Performance — covers Solana & Ethereum */}
               <Link
                 href="/solana"
                 onClick={() => setMobileOpen(false)}
@@ -108,38 +113,25 @@ export function Sidebar({ currentModule }: SidebarProps) {
                 <span className="truncate">Wallet Performance</span>
               </Link>
 
-              {/* Whale Radar / WalletWatch Pro — Module 2 */}
+              {/* Module 2: Contract Screener / Whale Radar — opens the complete 2nd module page */}
               <Link
-                href="/walletwatch"
+                href="/contract-screener"
                 onClick={() => setMobileOpen(false)}
                 className={`group flex items-center space-x-3 px-3.5 py-3 rounded-xl text-sm font-semibold transition-all ${
-                  isWalletWatch
+                  isModule2Active
                     ? "bg-[#131d31] text-white shadow-xs"
                     : "text-slate-400 hover:text-white hover:bg-slate-800/50"
                 }`}
               >
-                <Radio
+                <ShieldAlert
                   className={`w-5 h-5 shrink-0 ${
-                    isWalletWatch ? "text-purple-400" : "text-slate-400 group-hover:text-white"
+                    isModule2Active ? "text-purple-400" : "text-slate-400 group-hover:text-white"
                   }`}
                 />
-                <span className="truncate">Whale Radar</span>
+                <span className="truncate">Contract Screener</span>
               </Link>
 
-              {/* Contract Screener Module (ChainScope Platform Module) */}
-              <button
-                type="button"
-                onClick={() => {
-                  setMobileOpen(false);
-                  setModalModule("screener");
-                }}
-                className="w-full text-left group flex items-center space-x-3 px-3.5 py-3 rounded-xl text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800/50 transition-all cursor-pointer"
-              >
-                <ShieldAlert className="w-5 h-5 shrink-0 text-slate-400 group-hover:text-white" />
-                <span className="truncate">Contract Screener</span>
-              </button>
-
-              {/* Cluster Mapper Module (ChainScope Platform Module) */}
+              {/* Module 3: Cluster Mapper Module (ChainScope Platform Module) */}
               <button
                 type="button"
                 onClick={() => {
