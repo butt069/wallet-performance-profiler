@@ -50,11 +50,10 @@ function UnifiedDashboard() {
             <button
               type="button"
               onClick={() => setActiveModule("whale-radar")}
-              className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
-                activeModule === "whale-radar"
-                  ? "bg-purple-600 text-white shadow-md shadow-purple-600/30"
-                  : "text-slate-400 hover:text-white hover:bg-slate-800/60"
-              }`}
+              className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${activeModule === "whale-radar"
+                ? "bg-purple-600 text-white shadow-md shadow-purple-600/30"
+                : "text-slate-400 hover:text-white hover:bg-slate-800/60"
+                }`}
             >
               <Radio className="w-3.5 h-3.5 shrink-0" />
               <span>Whale Radar &amp; Live Terminal</span>
@@ -64,11 +63,10 @@ function UnifiedDashboard() {
             <button
               type="button"
               onClick={() => setActiveModule("profiler")}
-              className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
-                activeModule === "profiler"
-                  ? "bg-purple-600 text-white shadow-md shadow-purple-600/30"
-                  : "text-slate-400 hover:text-white hover:bg-slate-800/60"
-              }`}
+              className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${activeModule === "profiler"
+                ? "bg-purple-600 text-white shadow-md shadow-purple-600/30"
+                : "text-slate-400 hover:text-white hover:bg-slate-800/60"
+                }`}
             >
               <Activity className="w-3.5 h-3.5 shrink-0" />
               <span>Wallet Performance Profiler</span>
@@ -81,22 +79,20 @@ function UnifiedDashboard() {
               <button
                 type="button"
                 onClick={() => setActiveChain("solana")}
-                className={`px-3 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
-                  activeChain === "solana"
-                    ? "bg-blue-600 text-white shadow-xs"
-                    : "text-slate-400 hover:text-white"
-                }`}
+                className={`px-3 py-1 rounded-lg font-semibold transition-all cursor-pointer ${activeChain === "solana"
+                  ? "bg-blue-600 text-white shadow-xs"
+                  : "text-slate-400 hover:text-white"
+                  }`}
               >
                 Solana
               </button>
               <button
                 type="button"
                 onClick={() => setActiveChain("ethereum")}
-                className={`px-3 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
-                  activeChain === "ethereum"
-                    ? "bg-blue-600 text-white shadow-xs"
-                    : "text-slate-400 hover:text-white"
-                }`}
+                className={`px-3 py-1 rounded-lg font-semibold transition-all cursor-pointer ${activeChain === "ethereum"
+                  ? "bg-blue-600 text-white shadow-xs"
+                  : "text-slate-400 hover:text-white"
+                  }`}
               >
                 Ethereum
               </button>
@@ -118,7 +114,7 @@ function UnifiedDashboard() {
     </div>
   );
 }
-
+// fyp approved //
 export default function RootPage() {
   return (
     <Suspense fallback={<div className="min-h-screen bg-[#080D1A]" />}>
