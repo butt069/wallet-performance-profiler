@@ -762,8 +762,11 @@ export function WalletProfiler({ chain, hideSidebar = false, onChainChange }: Wa
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/60 font-mono">
-                      {paginatedTransactions.map((tx) => (
-                        <tr key={tx.signature} className="hover:bg-slate-800/40 transition-colors">
+                      {paginatedTransactions.map((tx, idx) => (
+                        <tr
+                          key={`${tx.signature}-${tx.slot ?? "tx"}-${idx}`}
+                          className="hover:bg-slate-800/40 transition-colors"
+                        >
                           <td className="py-3.5 px-3">
                             <div className="flex items-center space-x-2">
                               <span className="font-semibold text-white">
