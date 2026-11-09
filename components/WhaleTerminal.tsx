@@ -1,8 +1,3 @@
-"use client";
-
-import { WalletWatchDashboard } from "./WalletWatchDashboard";
-
-export default function WhaleTerminal() {
-  return <WalletWatchDashboard />;
-}
-export { WhaleTerminal };
+export { WhaleTerminal } from "./whale-radar/WhaleTerminal";
+import { WhaleTerminal } from "./whale-radar/WhaleTerminal";
+export default WhaleTerminal;

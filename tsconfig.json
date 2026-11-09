@@ -19,7 +19,12 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@/components/*": ["./components/*"],
+      "@/types/*": ["./types/*"],
+      "@/types": ["./types/index.ts"],
+      "@/lib/*": ["./lib/*"],
+      "@/lib": ["./lib/index.ts"]
     }
   },
   "include": [
