@@ -114,7 +114,7 @@ function UnifiedDashboard() {
     </div>
   );
 }
-// fyp approved //
+
 export default function RootPage() {
   return (
     <Suspense fallback={<div className="min-h-screen bg-[#080D1A]" />}>
