@@ -43,3 +43,4 @@ export interface CandleDataPoint {
   vol: number;
   ema: number;
 }
+

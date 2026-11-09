@@ -24,3 +24,4 @@ export function playChime(): void {
     // Audio context prevented or unavailable
   }
 }
+

@@ -112,7 +112,7 @@ function UnifiedDashboard() {
         {activeModule === "whale-radar" ? (
           <WalletWatchDashboard />
         ) : (
-          <WalletProfiler chain={activeChain} />
+          <WalletProfiler chain={activeChain} onChainChange={setActiveChain} />
         )}
       </main>
     </div>

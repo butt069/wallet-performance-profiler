@@ -97,3 +97,4 @@ export function GlobalLiveTicker({ onSelectAsset, activeAsset }: GlobalLiveTicke
     </div>
   );
 }
+

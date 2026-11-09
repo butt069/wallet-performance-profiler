@@ -60,3 +60,4 @@ export function formatRelativeTime(
   const d = new Date(timeMs);
   return d.toISOString().slice(0, 10);
 }
+

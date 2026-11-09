@@ -58,3 +58,4 @@ export interface WalletProfileData {
 
 export type SortField = "date" | "delta" | "fee";
 export type TimeFrame = "24h" | "7d" | "30d" | "all";
+

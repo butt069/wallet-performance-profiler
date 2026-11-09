@@ -109,9 +109,10 @@ function getPersonaBadge(persona: PersonaTag) {
 interface WalletProfilerProps {
   chain: "solana" | "ethereum";
   hideSidebar?: boolean;
+  onChainChange?: (chain: "solana" | "ethereum") => void;
 }
 
-export function WalletProfiler({ chain, hideSidebar = false }: WalletProfilerProps) {
+export function WalletProfiler({ chain, hideSidebar = false, onChainChange }: WalletProfilerProps) {
   const isSolana = chain === "solana";
   const currencySymbol = isSolana ? "SOL" : "ETH";
   const sampleWallets = isSolana ? SAMPLE_WALLETS_SOL : SAMPLE_WALLETS_ETH;
@@ -174,6 +175,16 @@ export function WalletProfiler({ chain, hideSidebar = false }: WalletProfilerPro
     },
     [isSolana]
   );
+
+  // Automatically analyze the primary representative wallet upon mount or chain switch
+  useEffect(() => {
+    const defaultAddress = isSolana
+      ? "5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1"
+      : "0xE592427A0AEce92De3Edee1F18E0157C05861564";
+
+    setAddressInput(defaultAddress);
+    handleAnalyze(defaultAddress);
+  }, [isSolana, handleAnalyze]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -321,26 +332,55 @@ export function WalletProfiler({ chain, hideSidebar = false }: WalletProfilerPro
 
           {/* Center: Solana / Ethereum chain switcher pills */}
           <div className="flex items-center bg-slate-900/70 border border-slate-800 rounded-xl p-1 gap-1 shrink-0">
-            <Link
-              href="/solana"
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                isSolana
-                  ? "bg-blue-600 text-white shadow-sm"
-                  : "text-slate-400 hover:text-white hover:bg-slate-800"
-              }`}
-            >
-              Solana Mainnet
-            </Link>
-            <Link
-              href="/ethereum"
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                !isSolana
-                  ? "bg-blue-600 text-white shadow-sm"
-                  : "text-slate-400 hover:text-white hover:bg-slate-800"
-              }`}
-            >
-              Ethereum Mainnet
-            </Link>
+            {onChainChange ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => onChainChange("solana")}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    isSolana
+                      ? "bg-blue-600 text-white shadow-sm"
+                      : "text-slate-400 hover:text-white hover:bg-slate-800"
+                  }`}
+                >
+                  Solana Mainnet
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onChainChange("ethereum")}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    !isSolana
+                      ? "bg-blue-600 text-white shadow-sm"
+                      : "text-slate-400 hover:text-white hover:bg-slate-800"
+                  }`}
+                >
+                  Ethereum Mainnet
+                </button>
+              </>
+            ) : (
+              <>
+                <Link
+                  href="/solana"
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    isSolana
+                      ? "bg-blue-600 text-white shadow-sm"
+                      : "text-slate-400 hover:text-white hover:bg-slate-800"
+                  }`}
+                >
+                  Solana Mainnet
+                </Link>
+                <Link
+                  href="/ethereum"
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    !isSolana
+                      ? "bg-blue-600 text-white shadow-sm"
+                      : "text-slate-400 hover:text-white hover:bg-slate-800"
+                  }`}
+                >
+                  Ethereum Mainnet
+                </Link>
+              </>
+            )}
           </div>
 
           {/* Right: live status badge */}

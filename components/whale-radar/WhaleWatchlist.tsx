@@ -5,3 +5,4 @@ export function WhaleWatchlist() {
   return null;
 }
 export default WhaleWatchlist;
+

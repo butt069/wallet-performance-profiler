@@ -18,8 +18,8 @@ export const SAMPLE_WALLETS_SOL = [
 ];
 
 export const SAMPLE_WALLETS_ETH = [
-  { label: "Vitalik Buterin", address: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045" },
   { label: "Uniswap V3 Router", address: "0xE592427A0AEce92De3Edee1F18E0157C05861564" },
+  { label: "Vitalik Buterin", address: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045" },
   { label: "Binance 14 Hot Wallet", address: "0x28C6c06298d514Db089934071355E5743bf21d60" },
   { label: "Wintermute Trading", address: "0x00000000ae347930bd1e7b0f35588b92280f9e75" },
 ];
@@ -246,3 +246,4 @@ export const INITIAL_SIGNALS: WhaleSignal[] = [
     isRead: false,
   },
 ];
+

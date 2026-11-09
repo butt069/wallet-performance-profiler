@@ -46,3 +46,4 @@ export function useChainScope(): ChainScopeContextType {
   }
   return context;
 }
+

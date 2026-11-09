@@ -6,3 +6,4 @@ export function WhaleTerminal(props: { hideSidebar?: boolean }) {
   return <WalletWatchDashboard {...props} />;
 }
 export default WhaleTerminal;
+
